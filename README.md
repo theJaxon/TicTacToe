@@ -117,3 +117,76 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 * Inspiration
 * etc
 
+---
+
+### Dockerizing the app:
+Client Dockerfile:
+```Dockerfile
+FROM maven:3.6.3-amazoncorretto-8 AS CLIENT 
+
+WORKDIR /tmp 
+
+ENTRYPOINT [ "java" ]
+
+CMD ["-jar", "TicTacToeFX-1.0-SNAPSHOT.jar"]
+
+# Use id command on the host os to find the username and the groupname of the current user
+
+ARG USER_NAME=jaxon 
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
+ENV DISPLAY :1
+
+
+RUN yum update -y && \
+    yum install git sudo libX11 -y && \
+    git clone https://github.com/MahaAmin/TicTacToe.git && \
+    yum clean all && \
+    rm -rf /var/cache/yum && \
+    cd /tmp/TicTacToe/Client && \
+    mvn clean compile && \
+    mvn clean install && \
+    cd /tmp/TicTacToe/Client/target 
+
+
+RUN /usr/sbin/groupadd -g ${GROUP_ID} ${USER_NAME} && \
+    /usr/sbin/useradd -d /home/${USER_NAME} -s /bin/bash -m ${USER_NAME} -u ${USER_ID} -g ${GROUP_ID}
+
+USER ${USER_NAME}
+
+ENV HOME /home/${USER_NAME}
+
+WORKDIR /tmp/TicTacToe/Client/target 
+
+```
+
+```
+docker build -t client .
+```
+
+```
+docker run -v /tmp/.X11-unix/:/tmp/.X11-unix -h $HOSTNAME -v $HOME/.Xauthority:/home/$USER/.Xauthority -e DISPLAY=$DISPLAY client
+```
+
+At this point this file results in the following error and i couldn't get a solution for it for now so i still can't launch the GUI, the following error is returned
+```
+Exception in thread "main" java.lang.reflect.InvocationTargetException
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.lang.reflect.Method.invoke(Method.java:498)
+	at sun.launcher.LauncherHelper$FXHelper.main(LauncherHelper.java:767)
+Caused by: java.lang.UnsupportedOperationException: Unable to open DISPLAY
+	at com.sun.glass.ui.gtk.GtkApplication.lambda$new$5(GtkApplication.java:142)
+	at java.security.AccessController.doPrivileged(Native Method)
+	at com.sun.glass.ui.gtk.GtkApplication.<init>(GtkApplication.java:140)
+	at com.sun.glass.ui.gtk.GtkPlatformFactory.createApplication(GtkPlatformFactory.java:41)
+	at com.sun.glass.ui.Application.run(Application.java:146)
+	at com.sun.javafx.tk.quantum.QuantumToolkit.startup(QuantumToolkit.java:257)
+	at com.sun.javafx.application.PlatformImpl.startup(PlatformImpl.java:211)
+	at com.sun.javafx.application.LauncherImpl.startToolkit(LauncherImpl.java:675)
+	at com.sun.javafx.application.LauncherImpl.launchApplicationWithArgs(LauncherImpl.java:337)
+	at com.sun.javafx.application.LauncherImpl.launchApplication(LauncherImpl.java:328)
+	... 5 more
+```
