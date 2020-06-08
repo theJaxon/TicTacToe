@@ -44,27 +44,6 @@ it's as easy as running the Server project first then the Client project.
 
 java 8u111 or higher recommended
 
-```
-Give examples
-```
-
-### Installing
-
-A step by step series of examples that tell you how to get a development env running
-
-Say what the step will be
-
-```
-Give the example
-```
-
-And repeat
-
-```
-until finished
-```
-
-End with an example of getting some data out of the system or using it for a little demo
 
 ## Features
 
@@ -96,37 +75,17 @@ Add additional notes about how to deploy this on a live system
 * [MySQL](https://dev.mysql.com/downloads/connector/j/) - JDBC Type 4 driver for MySQL
 * [JSON-Simple](https://code.google.com/archive/p/json-simple/) -  A simple Java toolkit for JSON
 
-## Contributing
-
-Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c63ec426) for details on our code of conduct, and the process for submitting pull requests to us.
-
-
-## Authors
-
-* **Billie Thompson** - *Initial work* - [PurpleBooth](https://github.com/PurpleBooth)
-
-See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
-
-## Acknowledgments
-
-* Hat tip to anyone whose code was used
-* Inspiration
-* etc
-
 ---
 
 ### Dockerizing the app:
-Client Dockerfile:
+#### Client Dockerfile:
+
 ```Dockerfile
 FROM maven:3.6.3-amazoncorretto-8 AS CLIENT 
 
 WORKDIR /tmp 
 
-ENTRYPOINT [ "/run.sh" ]
+ENTRYPOINT [ "/Client.sh" ]
 
 # Use id command on the host os to find the username and the groupname of the current user
 
@@ -138,7 +97,7 @@ ENV DISPLAY=:99
 
 RUN yum update -y && \
     yum install git sudo xorg-x11-server-Xvfb java-1.8.0-openjdk.x86_64 -y && \
-    git clone https://github.com/MahaAmin/TicTacToe.git && \
+    git clone https://github.com/theJaxon/TicTacToe.git && \
     yum clean all && \
     rm -rf /var/cache/yum && \
     cd /tmp/TicTacToe/Client && \
@@ -148,9 +107,9 @@ RUN yum update -y && \
 RUN /usr/sbin/groupadd -g ${GROUP_ID} ${USER_NAME} && \
     /usr/sbin/useradd -d /home/${USER_NAME} -s /bin/bash -m ${USER_NAME} -u ${USER_ID} -g ${GROUP_ID}
 
-COPY run.sh /run.sh
+COPY Client.sh /Client.sh
 
-RUN chmod a+x /run.sh 
+RUN chmod a+x /Client.sh 
 
 USER ${USER_NAME}
 
@@ -160,17 +119,131 @@ WORKDIR /tmp/TicTacToe/Client/target
 
 ```
 
-run.sh script:
+Client.sh script:
 ```bash
 #!/bin/bash
 Xvfb :99 -screen 0 640x480x8 -nolisten tcp &
-java -Dprism.order=sw -Dprism.verbose=true -jar TicTacToeFX-1.0-SNAPSHOT.jar
+java -Dprism.order=sw -jar TicTacToeFX-1.0-SNAPSHOT.jar
 ```
 
-```
-docker build -t client .
+#### Server Dockerfile:
+```Dockerfile
+FROM maven:3.6.3-amazoncorretto-8 AS SERVER 
+
+WORKDIR /tmp 
+
+ENTRYPOINT [ "/Server.sh" ]
+
+# Use id command on the host os to find the username and the groupname of the current user
+
+ARG USER_NAME=jaxon 
+ARG USER_ID=1000
+ARG GROUP_ID=1000
+
+ENV DISPLAY=:99
+
+
+RUN yum update -y && \
+    yum install git sudo xorg-x11-server-Xvfb java-1.8.0-openjdk.x86_64 -y && \
+    git clone https://github.com/theJaxon/TicTacToe.git && \
+    yum clean all && \
+    rm -rf /var/cache/yum && \
+    cd /tmp/TicTacToe/Server && \
+    mvn clean compile && \
+    mvn clean install 
+
+RUN /usr/sbin/groupadd -g ${GROUP_ID} ${USER_NAME} && \
+    /usr/sbin/useradd -d /home/${USER_NAME} -s /bin/bash -m ${USER_NAME} -u ${USER_ID} -g ${GROUP_ID}
+
+
+COPY Server.sh /Server.sh
+
+RUN chmod a+x /Server.sh 
+
+USER ${USER_NAME}
+
+ENV HOME /home/${USER_NAME}
+
+WORKDIR /tmp/TicTacToe/Server/target 
 ```
 
+Server.sh
+```bash
+#!/bin/bash
+Xvfb :99 -screen 0 640x480x8 -nolisten tcp &
+java -Dprism.order=sw -jar Server-1.0-SNAPSHOT.jar
 ```
-docker run -v /tmp/.X11-unix/:/tmp/.X11-unix -h $HOSTNAME -v $HOME/.Xauthority:/home/$USER/.Xauthority -e DISPLAY=$DISPLAY client
+
+#### MySQL Dockerfile:
+```Dockerfile
+FROM mysql:5
+
+COPY ./tictactoe.sql /docker-entrypoint-initdb.d
 ```
+
+#### docker-compose:
+```yaml
+version: "3.8"
+services:
+  mysql:
+    build: ./MySQL
+    expose:
+      - "3306"
+    ports: 
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=tictactoe
+      - MYSQL_USER=maha
+      - MYSQL_PASSWORD=maha
+    
+
+
+  client:
+    build: ./Client
+    hostname: $HOSTNAME
+    volumes:
+      - type: bind
+        source: /tmp/.X11-unix
+        target: /tmp/.X11-unix 
+
+      - type: bind
+        source: $HOME/.Xauthority
+        target: /home/$USER/.Xauthority
+    environment:
+      - DISPLAY=$DISPLAY
+
+    depends_on:
+      - server 
+
+  server:
+    build: ./Server
+    hostname: $HOSTNAME
+    expose: 
+      - "5005"
+    ports: 
+      - "5005:5005"
+    volumes:
+      - type: bind
+        source: /tmp/.X11-unix
+        target: /tmp/.X11-unix 
+
+      - type: bind
+        source: $HOME/.Xauthority
+        target: /home/$USER/.Xauthority
+    environment:
+      - DISPLAY=$DISPLAY
+    restart: always
+
+    depends_on:
+    - mysql
+
+```
+
+#### How to use it:
+```bash
+docker-compose up -d
+# Wait till everything starts then restart the client using 
+docker-compose restart client
+```
+Sign up for an account and you're set to play the game.

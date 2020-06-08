@@ -1,0 +1,56 @@
+version: "3.8"
+services:
+  mysql:
+    build: ./MySQL
+    expose:
+      - "3306"
+    ports: 
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=tictactoe
+      - MYSQL_USER=maha
+      - MYSQL_PASSWORD=maha
+    
+
+
+  client:
+    build: ./Client
+    hostname: $HOSTNAME
+    volumes:
+      - type: bind
+        source: /tmp/.X11-unix
+        target: /tmp/.X11-unix 
+
+      - type: bind
+        source: $HOME/.Xauthority
+        target: /home/$USER/.Xauthority
+    environment:
+      - DISPLAY=$DISPLAY
+
+    depends_on:
+      - server 
+
+  server:
+    build: ./Server
+    hostname: $HOSTNAME
+    expose: 
+      - "5005"
+    ports: 
+      - "5005:5005"
+    volumes:
+      - type: bind
+        source: /tmp/.X11-unix
+        target: /tmp/.X11-unix 
+
+      - type: bind
+        source: $HOME/.Xauthority
+        target: /home/$USER/.Xauthority
+    environment:
+      - DISPLAY=$DISPLAY
+    restart: always
+
+    depends_on:
+    - mysql
+
+  
